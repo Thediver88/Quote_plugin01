@@ -35,6 +35,7 @@ class Qtdesk_Settings {
 	 * @return int
 	 */
 	public static function normalize_int( $raw, $min, $max, $default ) {
+		$raw = is_string( $raw ) ? trim( $raw ) : $raw;
 		if ( ! is_scalar( $raw ) || ! is_numeric( $raw ) ) {
 			return (int) $default;
 		}

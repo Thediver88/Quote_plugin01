@@ -69,6 +69,9 @@ update_option( $method->get_instance_option_key(), array( 'title' => 'Flat rate'
 
 
 // A quote request, as the request form will create it later.
+foreach ( wc_get_orders( array( 'billing_email' => 'buyer@example.com', 'limit' => -1 ) ) as $old_order ) {
+	$old_order->delete( true );
+}
 $quote = wc_create_order( array( 'status' => 'qtdesk-requested' ) );
 $quote->add_product( wc_get_product( $tile->get_id() ), 2 );
 $quote->set_billing_email( 'buyer@example.com' );

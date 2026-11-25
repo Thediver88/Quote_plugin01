@@ -39,7 +39,7 @@ class Qtdesk_Settings_Page extends WC_Settings_Page {
 			'id'                => $id,
 			'type'              => 'number',
 			'default'           => $default,
-			'desc_tip'          => true,
+			'desc_tip'          => false,
 			'custom_attributes' => array(
 				'min'  => $min,
 				'max'  => $max,
@@ -100,7 +100,7 @@ class Qtdesk_Settings_Page extends WC_Settings_Page {
 				'id'       => Qtdesk_Settings::OPT_BUTTON_TEXT,
 				'type'     => 'text',
 				'default'  => '',
-				'desc_tip' => true,
+				'desc_tip' => false,
 			),
 			array(
 				'title'    => __( 'Request page', 'quote-desk-for-woocommerce' ),
@@ -110,7 +110,7 @@ class Qtdesk_Settings_Page extends WC_Settings_Page {
 				'default'  => '',
 				'class'    => 'wc-enhanced-select-nostd',
 				'css'      => 'min-width:300px;',
-				'desc_tip' => true,
+				'desc_tip' => false,
 			),
 			array(
 				'type' => 'sectionend',

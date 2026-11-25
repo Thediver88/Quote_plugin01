@@ -12,10 +12,10 @@ defined( 'ABSPATH' ) || exit;
  */
 class Qtdesk_Status {
 
-	/** Status slug without the "wc-" prefix (19 characters; WooCommerce allows 20). */
+	/** Status slug without the "wc-" prefix. */
 	const SLUG = 'qtdesk-requested';
 
-	/** Status key as WooCommerce stores it. */
+	/** Status key as WooCommerce stores it (19 characters; WooCommerce allows 20). */
 	const KEY = 'wc-qtdesk-requested';
 
 	/**
@@ -25,6 +25,8 @@ class Qtdesk_Status {
 		add_filter( 'woocommerce_register_shop_order_post_statuses', array( __CLASS__, 'register_post_status' ) );
 		add_filter( 'wc_order_statuses', array( __CLASS__, 'add_to_list' ) );
 		add_filter( 'wc_order_is_editable', array( __CLASS__, 'is_editable' ), 10, 2 );
+		// Analytics counts every status that is not excluded. The legacy reports only list paid
+		// statuses explicitly, so a quote request is already left out of them.
 		add_filter( 'woocommerce_analytics_excluded_statuses', array( __CLASS__, 'exclude_from_analytics' ) );
 	}
 

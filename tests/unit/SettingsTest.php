@@ -47,6 +47,9 @@ class SettingsTest extends TestCase {
 		$this->assertSame( 'Ask us', Qtdesk_Settings::normalize_text( '  <b>Ask</b>   us ' ) );
 		$this->assertSame( '', Qtdesk_Settings::normalize_text( array( 'x' ) ) );
 		$this->assertSame( Qtdesk_Settings::MAX_TEXT_LENGTH, strlen( Qtdesk_Settings::normalize_text( str_repeat( 'a', 200 ) ) ) );
+		if ( function_exists( 'mb_strlen' ) ) {
+			$this->assertSame( Qtdesk_Settings::MAX_TEXT_LENGTH, mb_strlen( Qtdesk_Settings::normalize_text( str_repeat( 'é', 200 ) ) ) );
+		}
 	}
 
 	/**

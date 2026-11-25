@@ -19,8 +19,7 @@ async function saveSettings( page ) {
 		b.removeAttribute( 'aria-disabled' );
 		b.classList.remove( 'is-busy' );
 	} );
-	await save.click( { force: true } );
-	await page.waitForLoadState( 'load' );
+	await Promise.all( [ page.waitForNavigation(), save.click( { force: true } ) ] );
 }
 
 test.describe( 'Settings screen', () => {
@@ -30,6 +29,10 @@ test.describe( 'Settings screen', () => {
 		await expect( page.locator( '#qtdesk_valid_days' ) ).toHaveValue( '14' );
 		await expect( page.locator( '#qtdesk_global_cap' ) ).toHaveValue( '30' );
 
+		// The browser would stop an out-of-range value before it is sent; the server must still clean it.
+		await page.locator( '#mainform' ).evaluate( ( f ) => {
+			f.noValidate = true;
+		} );
 		await page.locator( '#qtdesk_valid_days' ).fill( '9999' );
 		await page.locator( '#qtdesk_global_cap' ).fill( '0' );
 		await page.locator( '#qtdesk_button_text' ).fill( '  <b>Ask us</b> ' );
