@@ -22,7 +22,7 @@ Escalate with a push notification plus a one-tap question in the chat.
   can include a sample request (Sample Shelf). The shop prices and answers it. Works with block and
   classic cart/checkout. Status: design plan pending, no features built yet (skeleton 0.1.0).
 - Text domain / folder / slug: `quote-desk-for-woocommerce` (to be confirmed on WordPress.org).
-- PHP prefix: `qtdesk` / `Smpshelf_` / `QTDESK_`. Hooks: `qtdesk_*`.
+- PHP prefix: `qtdesk` / `Qtdesk_` / `QTDESK_`. Hooks: `qtdesk_*`.
 - Supports: PHP 7.4+, WordPress 6.9+, WooCommerce 10.0+, HPOS, block and classic cart/checkout.
 - Prices, limits and eligibility are always decided on the server; JavaScript is only presentation.
 
