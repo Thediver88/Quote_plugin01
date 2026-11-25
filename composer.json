@@ -1,6 +1,6 @@
 {
   "name": "cartwright/quote-desk-for-woocommerce",
-  "description": "Free sample requests for WooCommerce.",
+  "description": "Quote requests for WooCommerce shops that sell flooring, tile and fabric.",
   "type": "wordpress-plugin",
   "license": "GPL-2.0-or-later",
   "require-dev": {
