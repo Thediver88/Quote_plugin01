@@ -67,3 +67,11 @@ $instance_id = $zone->add_shipping_method( 'flat_rate' );
 $method      = WC_Shipping_Zones::get_shipping_method( $instance_id );
 update_option( $method->get_instance_option_key(), array( 'title' => 'Flat rate', 'tax_status' => 'none', 'cost' => '5', ) );
 
+
+flush_rewrite_rules();
+// WP-CLI can't detect mod_rewrite, so write Apache's rules ourselves (wp-env serves via Apache).
+file_put_contents(
+	ABSPATH . '.htaccess',
+	"# BEGIN WordPress\n<IfModule mod_rewrite.c>\nRewriteEngine On\nRewriteBase /\nRewriteRule ^index\\.php$ - [L]\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteRule . /index.php [L]\n</IfModule>\n# END WordPress\n"
+);
+WP_CLI::success( 'Quote Desk test store ready.' );
