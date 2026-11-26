@@ -68,6 +68,17 @@ $method      = WC_Shipping_Zones::get_shipping_method( $instance_id );
 update_option( $method->get_instance_option_key(), array( 'title' => 'Flat rate', 'tax_status' => 'none', 'cost' => '5', ) );
 
 
+// A quote request, as the request form will create it later.
+foreach ( wc_get_orders( array( 'billing_email' => 'buyer@example.com', 'limit' => -1 ) ) as $old_order ) {
+	$old_order->delete( true );
+}
+$quote = wc_create_order( array( 'status' => 'qtdesk-requested' ) );
+$quote->add_product( wc_get_product( $tile->get_id() ), 2 );
+$quote->set_billing_email( 'buyer@example.com' );
+$quote->set_billing_first_name( 'Quentin' );
+$quote->calculate_totals();
+$quote->save();
+
 flush_rewrite_rules();
 // WP-CLI can't detect mod_rewrite, so write Apache's rules ourselves (wp-env serves via Apache).
 file_put_contents(

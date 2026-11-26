@@ -34,3 +34,23 @@ add_action(
 		}
 	}
 );
+
+add_action(
+	'plugins_loaded',
+	static function () {
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			return;
+		}
+		require_once QTDESK_PATH . 'includes/class-qtdesk-settings.php';
+		require_once QTDESK_PATH . 'includes/class-qtdesk-status.php';
+		Qtdesk_Status::init();
+		if ( is_admin() ) {
+			require_once QTDESK_PATH . 'includes/class-qtdesk-admin.php';
+			Qtdesk_Admin::init();
+		}
+		/**
+		 * Fires once Quote Desk has loaded.
+		 */
+		do_action( 'qtdesk_loaded' );
+	}
+);
