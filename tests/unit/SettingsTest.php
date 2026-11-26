@@ -31,6 +31,17 @@ class SettingsTest extends TestCase {
 	}
 
 	/**
+	 * Decimals are cut, huge and non-finite numbers are handled.
+	 */
+	public function test_normalize_int_odd_numbers() {
+		$this->assertSame( 7, Qtdesk_Settings::normalize_int( '7.9', 1, 90, 14 ) );
+		$this->assertSame( 90, Qtdesk_Settings::normalize_int( '1e3', 1, 90, 14 ) );
+		$this->assertSame( 90, Qtdesk_Settings::normalize_int( '99999999999999999999', 1, 90, 14 ) );
+		$this->assertSame( 14, Qtdesk_Settings::normalize_int( 'INF', 1, 90, 14 ) );
+		$this->assertSame( 14, Qtdesk_Settings::normalize_int( NAN, 1, 90, 14 ) );
+	}
+
+	/**
 	 * Junk falls back to the default.
 	 */
 	public function test_normalize_int_defaults_on_junk() {

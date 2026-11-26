@@ -24,21 +24,21 @@ class Qtdesk_Settings_Page extends WC_Settings_Page {
 	/**
 	 * A number field with the usual look.
 	 *
-	 * @param string $id      Option name.
-	 * @param string $title   Label.
-	 * @param string $desc    Help text.
-	 * @param int    $default Default value.
-	 * @param int    $min     Smallest value.
-	 * @param int    $max     Largest value.
+	 * @param string $id            Option name.
+	 * @param string $title         Label.
+	 * @param string $desc          Help text.
+	 * @param int    $default_value Default value.
+	 * @param int    $min           Smallest value.
+	 * @param int    $max           Largest value.
 	 * @return array
 	 */
-	private function number_field( $id, $title, $desc, $default, $min, $max ) {
+	private function number_field( $id, $title, $desc, $default_value, $min, $max ) {
 		return array(
 			'title'             => $title,
 			'desc'              => $desc,
 			'id'                => $id,
 			'type'              => 'number',
-			'default'           => $default,
+			'default'           => $default_value,
 			'desc_tip'          => false,
 			'custom_attributes' => array(
 				'min'  => $min,

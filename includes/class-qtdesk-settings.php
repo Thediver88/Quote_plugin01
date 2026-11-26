@@ -28,16 +28,16 @@ class Qtdesk_Settings {
 	/**
 	 * Clean a typed whole number.
 	 *
-	 * @param mixed $raw     Typed value.
-	 * @param int   $min     Smallest allowed value.
-	 * @param int   $max     Largest allowed value.
-	 * @param int   $default Value used when the input is empty or not a number.
+	 * @param mixed $raw           Typed value.
+	 * @param int   $min           Smallest allowed value.
+	 * @param int   $max           Largest allowed value.
+	 * @param int   $default_value Value used when the input is empty or not a number.
 	 * @return int
 	 */
-	public static function normalize_int( $raw, $min, $max, $default ) {
+	public static function normalize_int( $raw, $min, $max, $default_value ) {
 		$raw = is_string( $raw ) ? trim( $raw ) : $raw;
-		if ( ! is_scalar( $raw ) || ! is_numeric( $raw ) ) {
-			return (int) $default;
+		if ( ! is_scalar( $raw ) || ! is_numeric( $raw ) || ! is_finite( (float) $raw ) ) {
+			return (int) $default_value;
 		}
 		return (int) min( $max, max( $min, (int) $raw ) );
 	}
