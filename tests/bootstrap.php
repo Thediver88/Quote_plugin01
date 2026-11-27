@@ -33,5 +33,20 @@ function wp_strip_all_tags( $text ) {
 	return trim( strip_tags( $text ) );
 }
 
+function sanitize_text_field( $text ) {
+	return trim( preg_replace( '/\s+/', ' ', strip_tags( $text ) ) );
+}
+function sanitize_textarea_field( $text ) {
+	return trim( strip_tags( $text ) );
+}
+function sanitize_email( $email ) {
+	return preg_replace( '/[^a-zA-Z0-9.!#$%&\'*+\/=?^_`{|}~@-]/', '', $email );
+}
+function is_email( $email ) {
+	return false !== filter_var( $email, FILTER_VALIDATE_EMAIL );
+}
+
 require_once dirname( __DIR__ ) . '/includes/class-qtdesk-settings.php';
+require_once dirname( __DIR__ ) . '/includes/class-qtdesk-limits.php';
+require_once dirname( __DIR__ ) . '/includes/class-qtdesk-request.php';
 require_once dirname( __DIR__ ) . '/includes/class-qtdesk-status.php';
