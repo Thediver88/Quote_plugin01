@@ -138,6 +138,28 @@ test.describe( 'Request form', () => {
 	} );
 } );
 
+test.describe( 'Cart rules of other plugins', () => {
+	test( 'a rule that blocks checkout also blocks the request, and nothing is created', async ( { page, context, baseURL } ) => {
+		await resetCounter( page );
+		await addTile( page );
+		await context.addCookies( [ { name: 'qtdesk_block_cart', value: '1', url: baseURL } ] );
+		await submitRequest( page, { email: 'block@example.com' } );
+		await expect( page.locator( '#qtdesk-errors' ) ).toContainText( 'needs attention' );
+		await context.clearCookies( { name: 'qtdesk_block_cart' } );
+		await page.goto( '/?qtdesk_dump=1' );
+		await expect( page.locator( 'body' ) ).not.toContainText( 'block@example.com' );
+	} );
+} );
+
+test.describe( 'Shop-wide counter', () => {
+	test( 'counts 1, 2, 3 on an empty hour without an object cache', async ( { page } ) => {
+		await resetCounter( page );
+		await page.goto( '/?qtdesk_bump=1' );
+		await expect( page.locator( 'body' ) ).toContainText( 'bump:1,2,3' );
+		await resetCounter( page );
+	} );
+} );
+
 test.describe( 'Hourly limits', () => {
 	test( 'over the cap requests are still saved; over the ceiling they are refused', async ( { page } ) => {
 		await adminLogin( page );
@@ -166,6 +188,11 @@ test.describe( 'Hourly limits', () => {
 		await submitRequest( guest, { email: 'cap3@example.com' } );
 		await expect( guest.locator( '#qtdesk-errors' ) ).toContainText( 'We cannot take more requests' ); // Over the ceiling.
 		await shopper.close();
+		await page.goto( '/?qtdesk_dump=1' );
+		const dump = await page.locator( 'body' ).innerText();
+		expect( dump ).toContain( 'cap1@example.com|qtdesk||1|GB' ); // Within the cap: normal.
+		expect( dump ).toContain( 'cap2@example.com|qtdesk|yes|1|GB' ); // Over the cap: saved quietly, tagged.
+		expect( dump ).not.toContain( 'cap3@example.com' ); // Over the ceiling: nothing created.
 
 		// Put the default back for any later test.
 		await page.goto( '/wp-admin/admin.php?page=wc-settings&tab=qtdesk' );

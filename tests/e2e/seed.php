@@ -95,9 +95,34 @@ add_action(
 		if ( isset( $_GET['qtdesk_reset_counter'] ) ) {
 			global $wpdb;
 			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'qtdesk\\_hits\\_%'" );
-			delete_transient( 'qtdesk_noop' );
+			foreach ( array( 'lines@example.com', 'cap1@example.com', 'cap2@example.com', 'cap3@example.com', 'ada@example.com', 'block@example.com', 'paying@example.com' ) as $mail ) {
+				delete_transient( 'qtdesk_email_' . substr( hash_hmac( 'sha256', strtolower( $mail ), wp_salt( 'auth' ) ), 0, 32 ) );
+			}
 			echo 'counter reset';
 			exit;
+		}
+		if ( isset( $_GET['qtdesk_bump'] ) ) {
+			$a = Qtdesk_Limits::bump_global();
+			$b = Qtdesk_Limits::bump_global();
+			$c = Qtdesk_Limits::bump_global();
+			echo "bump:$a,$b,$c";
+			exit;
+		}
+		if ( isset( $_GET['qtdesk_dump'] ) ) {
+			$out = array();
+			foreach ( wc_get_orders( array( 'status' => 'qtdesk-requested', 'limit' => 20, 'orderby' => 'id', 'order' => 'ASC' ) ) as $o ) {
+				$out[] = $o->get_billing_email() . '|' . $o->get_created_via() . '|' . $o->get_meta( '_qtdesk_overflow' ) . '|' . count( $o->get_items() ) . '|' . $o->get_billing_country();
+			}
+			echo 'dump:' . implode( ';', $out );
+			exit;
+		}
+	}
+);
+add_action(
+	'woocommerce_check_cart_items',
+	function () {
+		if ( ! empty( $_COOKIE['qtdesk_block_cart'] ) ) {
+			wc_add_notice( 'Blocked by a test rule.', 'error' );
 		}
 	}
 );

@@ -162,7 +162,7 @@ class Qtdesk_Request {
 
 		// 3. Field checks.
 		$raw       = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above; every value is cleaned in validate().
-		$countries = WC()->countries->get_countries();
+		$countries = WC()->countries->get_shipping_countries();
 		$checked   = self::validate( is_array( $raw ) ? $raw : array(), $countries );
 		self::$values = $checked['values'];
 		self::$errors = $checked['errors'];
@@ -181,9 +181,12 @@ class Qtdesk_Request {
 			self::$errors['form'] = __( 'Your cart is empty.', 'quote-desk-for-woocommerce' );
 			return;
 		}
-		WC()->cart->check_cart_items();
-		$cart_errors = wc_get_notices( 'error' );
+		// Run the same checks as checkout (core's and other plugins' hang off this action), then give the shopper's own notices back.
+		$saved_notices = wc_get_notices();
 		wc_clear_notices();
+		do_action( 'woocommerce_check_cart_items' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- WooCommerce's own hook.
+		$cart_errors = wc_get_notices( 'error' );
+		WC()->session->set( 'wc_notices', $saved_notices ? $saved_notices : null );
 		if ( $cart_errors ) {
 			self::$errors['form'] = __( 'Something in your cart needs attention. Please review the cart and try again.', 'quote-desk-for-woocommerce' );
 			return;
@@ -207,7 +210,7 @@ class Qtdesk_Request {
 		$overflow = false;
 		$cap      = Qtdesk_Settings::global_cap();
 		if ( $cap > 0 ) {
-			$exempt = $user_id && 'yes' === get_user_meta( $user_id, 'paying_customer', true );
+			$exempt = $user_id && ( new WC_Customer( $user_id ) )->get_is_paying_customer();
 			switch ( Qtdesk_Limits::decide( Qtdesk_Limits::bump_global(), $cap, Qtdesk_Settings::ceiling(), (bool) $exempt ) ) {
 				case 'refuse':
 					$contact = get_option( 'woocommerce_email_from_address', get_option( 'admin_email' ) );
@@ -263,32 +266,34 @@ class Qtdesk_Request {
 		$customer->set_shipping_address_1( $values['address'] );
 		WC()->cart->calculate_totals();
 
-		$order = wc_create_order(
-			array(
-				'created_via' => 'qtdesk',
-				'customer_id' => get_current_user_id(),
-			)
-		);
-		if ( is_wp_error( $order ) ) {
-			throw new Exception( 'Order could not be created.' );
+		// Built in memory and saved once, so other plugins never see a half-made order.
+		$order = new WC_Order();
+		$order->set_created_via( 'qtdesk' );
+		if ( get_current_user_id() ) {
+			$order->set_customer_id( get_current_user_id() );
 		}
 
 		foreach ( WC()->cart->get_cart() as $cart_key => $cart_item ) {
 			$item = new WC_Order_Item_Product();
-			$item->legacy_values        = $cart_item; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- WooCommerce's own property.
-			$item->legacy_cart_item_key = $cart_key; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- WooCommerce's own property.
+			$item->legacy_values        = $cart_item;
+			$item->legacy_cart_item_key = $cart_key;
+			$product                    = $cart_item['data'];
 			// Price before coupons and without tax: tax is worked out again for the order's address, and the shop prices the rest.
+			// Built the way checkout builds it (no set_product(), which would overwrite the chosen variation).
 			$item->set_props(
 				array(
-					'quantity'  => $cart_item['quantity'],
-					'variation' => $cart_item['variation'],
-					'subtotal'  => $cart_item['line_subtotal'],
-					'total'     => $cart_item['line_subtotal'],
+					'quantity'     => $cart_item['quantity'],
+					'variation'    => $cart_item['variation'],
+					'subtotal'     => $cart_item['line_subtotal'],
+					'total'        => $cart_item['line_subtotal'],
+					'name'         => $product->get_name(),
+					'tax_class'    => $product->get_tax_class(),
+					'product_id'   => $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id(),
+					'variation_id' => $product->is_type( 'variation' ) ? $product->get_id() : 0,
 				)
 			);
-			if ( ! empty( $cart_item['data'] ) ) {
-				$item->set_product( $cart_item['data'] );
-			}
+			$item->set_backorder_meta();
+			$item = apply_filters( 'woocommerce_checkout_create_order_line_item_object', $item, $cart_key, $cart_item, $order ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- WooCommerce's own hook.
 			// Same hook as checkout, with the unsaved item: other plugins copy their cart data onto it.
 			do_action( 'woocommerce_checkout_create_order_line_item', $item, $cart_key, $cart_item, $order ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- WooCommerce's own hook.
 			$order->add_item( $item );
@@ -313,6 +318,7 @@ class Qtdesk_Request {
 		if ( $overflow ) {
 			$order->update_meta_data( '_qtdesk_overflow', 'yes' );
 		}
+		$order->set_status( Qtdesk_Status::SLUG );
 		$order->calculate_totals( true );
 
 		$coupons = WC()->cart->get_applied_coupons();
@@ -326,7 +332,6 @@ class Qtdesk_Request {
 			);
 		}
 
-		$order->set_status( Qtdesk_Status::SLUG );
 		$order->save();
 		WC()->cart->empty_cart();
 
@@ -373,6 +378,7 @@ class Qtdesk_Request {
 	 * @return string
 	 */
 	public static function render() {
+		wc_maybe_define_constant( 'DONOTCACHEPAGE', true );
 		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
 			return '';
 		}
@@ -443,7 +449,7 @@ class Qtdesk_Request {
 		echo '<p><button type="submit" class="button alt" name="' . esc_attr( self::ACTION ) . '" value="1">' . esc_html( Qtdesk_Settings::button_text() ) . '</button></p>';
 		echo '</form>';
 		if ( self::$errors ) {
-			echo '<script>document.getElementById("qtdesk-errors")&&document.getElementById("qtdesk-errors").focus();</script>';
+			wp_print_inline_script_tag( 'var qe=document.getElementById("qtdesk-errors");if(qe){qe.focus();}' );
 		}
 		echo '</div>';
 		return ob_get_clean();
@@ -458,7 +464,7 @@ class Qtdesk_Request {
 			$product = $cart_item['data'];
 			echo '<tr><td>' . esc_html( $product->get_name() );
 			echo wc_get_formatted_cart_item_data( $cart_item ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WooCommerce escapes this.
-			echo '</td><td>' . esc_html( (string) $cart_item['quantity'] ) . '</td><td>' . wp_kses_post( wc_price( $cart_item['line_subtotal'] ) ) . '</td></tr>';
+			echo '</td><td>' . esc_html( (string) $cart_item['quantity'] ) . '</td><td>' . wp_kses_post( WC()->cart->get_product_subtotal( $cart_item['data'], $cart_item['quantity'] ) ) . '</td></tr>';
 		}
 		echo '</tbody></table>';
 		echo '<p class="qtdesk-note">' . esc_html__( 'These are the prices in your cart now. We will send you the final quote, with delivery and tax.', 'quote-desk-for-woocommerce' ) . '</p>';

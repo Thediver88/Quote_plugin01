@@ -28,6 +28,10 @@ class Qtdesk_Limits {
 			return '';
 		}
 		$ip = trim( $ip );
+		// An IPv4 address written the IPv6 way (::ffff:1.2.3.4) is the same visitor as plain IPv4.
+		if ( preg_match( '/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i', $ip, $m ) ) {
+			$ip = $m[1];
+		}
 		if ( false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
 			return '';
 		}
@@ -128,6 +132,9 @@ class Qtdesk_Limits {
 		// A single atomic statement: a new hour inserts 1; later requests add 1 and read the result back.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$affected = $wpdb->query( $wpdb->prepare( "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '1', 'off') ON DUPLICATE KEY UPDATE option_value = LAST_INSERT_ID(option_value + 1)", $bucket ) );
+		if ( false === $affected ) {
+			return 0; // The database failed: do not guess, let the request through.
+		}
 		if ( 1 === (int) $affected ) {
 			return 1;
 		}

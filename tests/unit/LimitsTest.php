@@ -27,6 +27,14 @@ class LimitsTest extends TestCase {
 	}
 
 	/**
+	 * IPv4 written the IPv6 way counts as plain IPv4, private ones stay unusable.
+	 */
+	public function test_normalize_ip_ipv4_mapped() {
+		$this->assertSame( '8.8.8.8', Qtdesk_Limits::normalize_ip( '::ffff:8.8.8.8' ) );
+		$this->assertSame( '', Qtdesk_Limits::normalize_ip( '::ffff:10.0.0.1' ) );
+	}
+
+	/**
 	 * IPv6 addresses are grouped by their first 64 bits.
 	 */
 	public function test_normalize_ip_ipv6_groups_by_64() {
