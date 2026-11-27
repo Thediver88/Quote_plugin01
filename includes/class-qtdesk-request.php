@@ -161,8 +161,8 @@ class Qtdesk_Request {
 		}
 
 		// 3. Field checks.
-		$posted       = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above; every value is cleaned in validate().
-		$raw          = array();
+		$posted = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above; every value is cleaned in validate().
+		$raw    = array();
 		foreach ( array( 'name', 'email', 'phone', 'country', 'postcode', 'address', 'message' ) as $field_key ) {
 			if ( isset( $posted[ 'qtdesk_' . $field_key ] ) ) {
 				$raw[ $field_key ] = $posted[ 'qtdesk_' . $field_key ];
@@ -205,7 +205,7 @@ class Qtdesk_Request {
 		}
 
 		// 5. Limits. Counters go up only now, after every other check has passed.
-		$user_id = get_current_user_id();
+		$user_id  = get_current_user_id();
 		$ip_limit = Qtdesk_Settings::ip_limit();
 		$ip       = Qtdesk_Limits::client_ip();
 		if ( ! Qtdesk_Limits::within( 'email', self::$values['email'], 3 )
@@ -302,6 +302,7 @@ class Qtdesk_Request {
 
 		foreach ( WC()->cart->get_cart() as $cart_key => $cart_item ) {
 			$item = new WC_Order_Item_Product();
+
 			$item->legacy_values        = $cart_item;
 			$item->legacy_cart_item_key = $cart_key;
 
