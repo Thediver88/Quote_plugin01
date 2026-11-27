@@ -44,6 +44,11 @@ add_action(
 		require_once QTDESK_PATH . 'includes/class-qtdesk-settings.php';
 		require_once QTDESK_PATH . 'includes/class-qtdesk-status.php';
 		Qtdesk_Status::init();
+		require_once QTDESK_PATH . 'includes/class-qtdesk-limits.php';
+		require_once QTDESK_PATH . 'includes/class-qtdesk-request.php';
+		require_once QTDESK_PATH . 'includes/class-qtdesk-cart-link.php';
+		Qtdesk_Request::init();
+		Qtdesk_Cart_Link::init();
 		if ( is_admin() ) {
 			require_once QTDESK_PATH . 'includes/class-qtdesk-admin.php';
 			Qtdesk_Admin::init();
@@ -52,5 +57,17 @@ add_action(
 		 * Fires once Quote Desk has loaded.
 		 */
 		do_action( 'qtdesk_loaded' );
+	}
+);
+
+// Create the request page when the plugin is activated (WooCommerce must be active).
+register_activation_hook(
+	__FILE__,
+	static function () {
+		if ( class_exists( 'WooCommerce' ) ) {
+			require_once QTDESK_PATH . 'includes/class-qtdesk-settings.php';
+			require_once QTDESK_PATH . 'includes/class-qtdesk-request.php';
+			Qtdesk_Request::create_page();
+		}
 	}
 );

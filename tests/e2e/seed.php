@@ -33,6 +33,8 @@ $tile->set_name( 'Sample Tile' );
 $tile->set_slug( 'sample-tile' );
 $tile->set_sku( 'QD-TILE' );
 $tile->set_regular_price( '30' );
+$tile->set_manage_stock( true );
+$tile->set_stock_quantity( 50 );
 $tile->set_status( 'publish' );
 $tile->save();
 
@@ -78,6 +80,76 @@ $quote->set_billing_email( 'buyer@example.com' );
 $quote->set_billing_first_name( 'Quentin' );
 $quote->calculate_totals();
 $quote->save();
+
+
+// Test helper (mu-plugin): resets the hourly counter and mimics another plugin that stores data on cart lines.
+wp_mkdir_p( WPMU_PLUGIN_DIR );
+file_put_contents(
+	WPMU_PLUGIN_DIR . '/qtdesk-e2e-helper.php',
+	<<<'PHP'
+<?php
+// Written by tests/e2e/seed.php. Test stores only.
+add_action(
+	'init',
+	function () {
+		if ( isset( $_GET['qtdesk_reset_counter'] ) ) {
+			global $wpdb;
+			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'qtdesk\\_hits\\_%'" );
+			foreach ( array( 'lines@example.com', 'cap1@example.com', 'cap2@example.com', 'cap3@example.com', 'ada@example.com', 'block@example.com', 'paying@example.com', 'double@example.com' ) as $mail ) {
+				delete_transient( 'qtdesk_email_' . substr( hash_hmac( 'sha256', strtolower( $mail ), wp_salt( 'auth' ) ), 0, 32 ) );
+			}
+			echo 'counter reset';
+			exit;
+		}
+		if ( isset( $_GET['qtdesk_bump'] ) ) {
+			$a = Qtdesk_Limits::bump_global();
+			$b = Qtdesk_Limits::bump_global();
+			$c = Qtdesk_Limits::bump_global();
+			echo "bump:$a,$b,$c";
+			exit;
+		}
+		if ( isset( $_GET['qtdesk_dump'] ) ) {
+			$out = array();
+			foreach ( wc_get_orders( array( 'status' => 'qtdesk-requested', 'limit' => 20, 'orderby' => 'id', 'order' => 'ASC' ) ) as $o ) {
+				$out[] = $o->get_billing_email() . '|' . $o->get_created_via() . '|' . $o->get_meta( '_qtdesk_overflow' ) . '|' . count( $o->get_items() ) . '|' . $o->get_billing_country();
+			}
+			echo 'dump:' . implode( ';', $out );
+			exit;
+		}
+	}
+);
+add_action(
+	'woocommerce_check_cart_items',
+	function () {
+		if ( ! empty( $_COOKIE['qtdesk_block_cart'] ) ) {
+			wc_add_notice( 'Blocked by a test rule.', 'error' );
+		}
+	}
+);
+add_filter(
+	'woocommerce_add_cart_item_data',
+	function ( $data ) {
+		if ( isset( $_REQUEST['qtdesk_cartdata'] ) ) {
+			$data['qtdesk_test'] = 'carried';
+		}
+		return $data;
+	}
+);
+add_action(
+	'woocommerce_checkout_create_order_line_item',
+	function ( $item, $key, $values ) {
+		if ( ! empty( $values['qtdesk_test'] ) ) {
+			$item->add_meta_data( 'Test note', $values['qtdesk_test'] );
+		}
+	},
+	10,
+	3
+);
+PHP
+);
+
+// The request page (activation may have run before WooCommerce was active).
+Qtdesk_Request::create_page();
 
 flush_rewrite_rules();
 // WP-CLI can't detect mod_rewrite, so write Apache's rules ourselves (wp-env serves via Apache).
