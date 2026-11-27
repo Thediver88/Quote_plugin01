@@ -205,7 +205,7 @@ class Qtdesk_Request {
 		}
 
 		// A double click or a reload of the POST must not make a second order: the same form and cart is handled once.
-		// (Guests all share one nonce value, so the key uses the shopper's cart session, the e-mail and the cart contents instead.)
+		// Guests all share one nonce value, so the key uses the shopper's cart session, the e-mail and the cart contents instead.
 		$once = 'qtdesk_once_' . md5( WC()->session->get_customer_id() . '|' . strtolower( self::$values['email'] ) . '|' . WC()->cart->get_cart_hash() );
 		if ( get_transient( $once ) ) {
 			self::done();
