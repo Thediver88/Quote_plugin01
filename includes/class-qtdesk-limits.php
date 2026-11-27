@@ -92,24 +92,44 @@ class Qtdesk_Limits {
 	}
 
 	/**
-	 * Count one request against a limit kept in a one-hour transient.
+	 * Whether another request is still within a per-address limit (counts nothing).
 	 *
 	 * @param string $kind  "email", "user" or "ip".
-	 * @param string $value What to count (email address, user ID, normalised address).
+	 * @param string $value The address, user id or IP.
 	 * @param int    $limit Allowed requests per hour; 0 means no limit.
-	 * @return bool True when the request is within the limit.
+	 * @return bool
 	 */
-	public static function allow( $kind, $value, $limit ) {
+	public static function within( $kind, $value, $limit ) {
 		if ( $limit <= 0 || '' === $value ) {
 			return true;
 		}
-		$key   = 'qtdesk_' . $kind . '_' . self::hash( strtolower( $value ) );
-		$count = (int) get_transient( $key );
-		if ( $count >= $limit ) {
-			return false;
+		return (int) get_transient( self::key( $kind, $value ) ) < $limit;
+	}
+
+	/**
+	 * Count one request against a per-address limit.
+	 *
+	 * @param string $kind  "email", "user" or "ip".
+	 * @param string $value The address, user id or IP.
+	 * @param int    $limit Allowed requests per hour; 0 means no limit.
+	 */
+	public static function record( $kind, $value, $limit ) {
+		if ( $limit <= 0 || '' === $value ) {
+			return;
 		}
-		set_transient( $key, $count + 1, HOUR_IN_SECONDS );
-		return true;
+		$key = self::key( $kind, $value );
+		set_transient( $key, (int) get_transient( $key ) + 1, HOUR_IN_SECONDS );
+	}
+
+	/**
+	 * Transient name for a limit bucket.
+	 *
+	 * @param string $kind  Bucket kind.
+	 * @param string $value Value to count.
+	 * @return string
+	 */
+	private static function key( $kind, $value ) {
+		return 'qtdesk_' . $kind . '_' . self::hash( strtolower( $value ) );
 	}
 
 	/**
@@ -129,17 +149,16 @@ class Qtdesk_Limits {
 		}
 
 		global $wpdb;
-		// A single atomic statement: a new hour inserts 1; later requests add 1 and read the result back.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$affected = $wpdb->query( $wpdb->prepare( "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '1', 'off') ON DUPLICATE KEY UPDATE option_value = LAST_INSERT_ID(option_value + 1)", $bucket ) );
-		if ( false === $affected ) {
+		// Three statements that do not depend on how many rows MySQL reports as changed:
+		// make sure the row exists, add one atomically (remembering the result for this connection), read it back.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- A shop-wide counter must be atomic; the object cache cannot be relied on.
+		$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '0', 'off')", $bucket ) );
+		$done = $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = LAST_INSERT_ID(option_value + 1) WHERE option_name = %s", $bucket ) );
+		if ( false === $done ) {
 			return 0; // The database failed: do not guess, let the request through.
 		}
-		if ( 1 === (int) $affected ) {
-			return 1;
-		}
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		return (int) $wpdb->get_var( 'SELECT LAST_INSERT_ID()' );
+		// phpcs:enable
 	}
 
 	/**

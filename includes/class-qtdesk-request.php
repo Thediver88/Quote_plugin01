@@ -161,9 +161,15 @@ class Qtdesk_Request {
 		}
 
 		// 3. Field checks.
-		$raw       = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above; every value is cleaned in validate().
-		$countries = WC()->countries->get_shipping_countries();
-		$checked   = self::validate( is_array( $raw ) ? $raw : array(), $countries );
+		$posted       = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above; every value is cleaned in validate().
+		$raw          = array();
+		foreach ( array( 'name', 'email', 'phone', 'country', 'postcode', 'address', 'message' ) as $field_key ) {
+			if ( isset( $posted[ 'qtdesk_' . $field_key ] ) ) {
+				$raw[ $field_key ] = $posted[ 'qtdesk_' . $field_key ];
+			}
+		}
+		$countries    = WC()->countries->get_shipping_countries();
+		$checked      = self::validate( $raw, $countries );
 		self::$values = $checked['values'];
 		self::$errors = $checked['errors'];
 		if ( '' !== self::$values['postcode'] && '' !== self::$values['country'] && ! WC_Validation::is_postcode( self::$values['postcode'], self::$values['country'] ) ) {
@@ -200,12 +206,20 @@ class Qtdesk_Request {
 
 		// 5. Limits. Counters go up only now, after every other check has passed.
 		$user_id = get_current_user_id();
-		if ( ! Qtdesk_Limits::allow( 'email', self::$values['email'], 3 )
-			|| ( $user_id && ! Qtdesk_Limits::allow( 'user', (string) $user_id, 5 ) )
-			|| ! Qtdesk_Limits::allow( 'ip', Qtdesk_Limits::client_ip(), Qtdesk_Settings::ip_limit() ) ) {
+		$ip_limit = Qtdesk_Settings::ip_limit();
+		$ip       = Qtdesk_Limits::client_ip();
+		if ( ! Qtdesk_Limits::within( 'email', self::$values['email'], 3 )
+			|| ( $user_id && ! Qtdesk_Limits::within( 'user', (string) $user_id, 5 ) )
+			|| ! Qtdesk_Limits::within( 'ip', $ip, $ip_limit ) ) {
 			self::$errors['form'] = __( 'You have sent several requests already. Please try again in an hour.', 'quote-desk-for-woocommerce' );
 			return;
 		}
+		// A refused attempt above spends nothing; the counters go up together.
+		Qtdesk_Limits::record( 'email', self::$values['email'], 3 );
+		if ( $user_id ) {
+			Qtdesk_Limits::record( 'user', (string) $user_id, 5 );
+		}
+		Qtdesk_Limits::record( 'ip', $ip, $ip_limit );
 
 		$overflow = false;
 		$cap      = Qtdesk_Settings::global_cap();
@@ -214,6 +228,7 @@ class Qtdesk_Request {
 			switch ( Qtdesk_Limits::decide( Qtdesk_Limits::bump_global(), $cap, Qtdesk_Settings::ceiling(), (bool) $exempt ) ) {
 				case 'refuse':
 					$contact = get_option( 'woocommerce_email_from_address', get_option( 'admin_email' ) );
+
 					self::$errors['form'] = sprintf(
 						/* translators: %s: the shop's email address. */
 						__( 'We cannot take more requests right now. Please write to us at %s.', 'quote-desk-for-woocommerce' ),
@@ -258,6 +273,14 @@ class Qtdesk_Request {
 
 		// Put the delivery details on the customer first, so tax and prices follow the country typed on the form.
 		$customer = WC()->customer;
+		$before   = array(
+			'billing_country'    => $customer->get_billing_country(),
+			'billing_postcode'   => $customer->get_billing_postcode(),
+			'billing_address_1'  => $customer->get_billing_address_1(),
+			'shipping_country'   => $customer->get_shipping_country(),
+			'shipping_postcode'  => $customer->get_shipping_postcode(),
+			'shipping_address_1' => $customer->get_shipping_address_1(),
+		);
 		$customer->set_billing_country( $values['country'] );
 		$customer->set_billing_postcode( $values['postcode'] );
 		$customer->set_shipping_country( $values['country'] );
@@ -265,6 +288,10 @@ class Qtdesk_Request {
 		$customer->set_billing_address_1( $values['address'] );
 		$customer->set_shipping_address_1( $values['address'] );
 		WC()->cart->calculate_totals();
+		// Give the shopper's saved address back: a quote request must not overwrite it.
+		foreach ( $before as $prop => $old ) {
+			$customer->{'set_' . $prop}( $old );
+		}
 
 		// Built in memory and saved once, so other plugins never see a half-made order.
 		$order = new WC_Order();
@@ -277,7 +304,8 @@ class Qtdesk_Request {
 			$item = new WC_Order_Item_Product();
 			$item->legacy_values        = $cart_item;
 			$item->legacy_cart_item_key = $cart_key;
-			$product                    = $cart_item['data'];
+
+			$product = $cart_item['data'];
 			// Price before coupons and without tax: tax is worked out again for the order's address, and the shop prices the rest.
 			// Built the way checkout builds it (no set_product(), which would overwrite the chosen variation).
 			$item->set_props(
@@ -362,9 +390,9 @@ class Qtdesk_Request {
 		echo '<label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . ( $req ? ' <span class="required" aria-hidden="true">*</span>' : '' ) . '</label>';
 		$described = $error ? ' aria-describedby="' . esc_attr( $id ) . '-error" aria-invalid="true"' : '';
 		if ( 'textarea' === $type ) {
-			echo '<textarea id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" rows="4" maxlength="2000"' . $described . '>' . esc_textarea( $value ) . '</textarea>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $described is built from escaped parts.
+			echo '<textarea id="' . esc_attr( $id ) . '" name="' . esc_attr( 'qtdesk_' . $name ) . '" rows="4" maxlength="2000"' . $described . '>' . esc_textarea( $value ) . '</textarea>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $described is built from escaped parts.
 		} else {
-			echo '<input type="' . esc_attr( $type ) . '" id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ) . '" autocomplete="' . esc_attr( $auto ) . '"' . ( $req ? ' required' : '' ) . $described . '>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $described is built from escaped parts.
+			echo '<input type="' . esc_attr( $type ) . '" id="' . esc_attr( $id ) . '" name="' . esc_attr( 'qtdesk_' . $name ) . '" value="' . esc_attr( $value ) . '" autocomplete="' . esc_attr( $auto ) . '"' . ( $req ? ' required' : '' ) . $described . '>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $described is built from escaped parts.
 		}
 		if ( $error ) {
 			echo '<span class="qtdesk-error" id="' . esc_attr( $id ) . '-error">' . esc_html( $error ) . '</span>';
@@ -416,7 +444,9 @@ class Qtdesk_Request {
 			self::$values['country'] = WC()->countries->get_base_country();
 		}
 
-		echo '<form method="post" class="qtdesk-form" novalidate>';
+		// Field names carry a prefix: a bare "name" in a POST makes WordPress look for a post of that name and answer 404.
+		$action = self::page_url();
+		echo '<form method="post" class="qtdesk-form" novalidate' . ( $action ? ' action="' . esc_url( $action ) . '"' : '' ) . '>';
 		wp_nonce_field( self::NONCE, '_qtdesk_nonce' );
 		self::field( 'name', __( 'Your name', 'quote-desk-for-woocommerce' ), 'text', true, 'name' );
 		self::field( 'email', __( 'Email address', 'quote-desk-for-woocommerce' ), 'email', true, 'email' );
@@ -426,7 +456,7 @@ class Qtdesk_Request {
 
 		$error = isset( self::$errors['country'] ) ? self::$errors['country'] : '';
 		echo '<p class="form-row qtdesk-field"><label for="qtdesk-country">' . esc_html__( 'Country', 'quote-desk-for-woocommerce' ) . ' <span class="required" aria-hidden="true">*</span></label>';
-		echo '<select id="qtdesk-country" name="country" autocomplete="country"' . ( $error ? ' aria-describedby="qtdesk-country-error" aria-invalid="true"' : '' ) . '>';
+		echo '<select id="qtdesk-country" name="qtdesk_country" autocomplete="country"' . ( $error ? ' aria-describedby="qtdesk-country-error" aria-invalid="true"' : '' ) . '>';
 		foreach ( WC()->countries->get_shipping_countries() as $code => $country_name ) {
 			echo '<option value="' . esc_attr( $code ) . '"' . selected( self::$values['country'], $code, false ) . '>' . esc_html( $country_name ) . '</option>';
 		}
