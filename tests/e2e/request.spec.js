@@ -138,6 +138,30 @@ test.describe( 'Request form', () => {
 	} );
 } );
 
+test.describe( 'Double submit', () => {
+	test( 'the same form sent twice makes one order', async ( { page } ) => {
+		await resetCounter( page );
+		await addTile( page );
+		await page.goto( '/request-a-quote/' );
+		await page.locator( '#qtdesk-name' ).fill( 'Dora Double' );
+		await page.locator( '#qtdesk-email' ).fill( 'double@example.com' );
+		await page.locator( '#qtdesk-address' ).fill( 'Twice Street 2' );
+		await page.locator( '#qtdesk-postcode' ).fill( 'SW1A 1AA' );
+		await page.locator( '#qtdesk-country' ).selectOption( 'GB' );
+		await page.evaluate( async () => {
+			const form = document.querySelector( 'form.qtdesk-form' );
+			const data = new URLSearchParams( new FormData( form ) );
+			data.set( 'qtdesk_submit', '1' );
+			const send = () => fetch( form.action || location.href, { method: 'POST', body: data, credentials: 'same-origin', redirect: 'manual' } );
+			await send();
+			await send();
+		} );
+		await page.goto( '/?qtdesk_dump=1' );
+		const text = await page.locator( 'body' ).innerText();
+		expect( text.split( 'double@example.com' ).length - 1 ).toBe( 1 );
+	} );
+} );
+
 test.describe( 'Cart rules of other plugins', () => {
 	test( 'a rule that blocks checkout also blocks the request, and nothing is created', async ( { page, context, baseURL } ) => {
 		await resetCounter( page );

@@ -95,7 +95,7 @@ add_action(
 		if ( isset( $_GET['qtdesk_reset_counter'] ) ) {
 			global $wpdb;
 			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'qtdesk\\_hits\\_%'" );
-			foreach ( array( 'lines@example.com', 'cap1@example.com', 'cap2@example.com', 'cap3@example.com', 'ada@example.com', 'block@example.com', 'paying@example.com' ) as $mail ) {
+			foreach ( array( 'lines@example.com', 'cap1@example.com', 'cap2@example.com', 'cap3@example.com', 'ada@example.com', 'block@example.com', 'paying@example.com', 'double@example.com' ) as $mail ) {
 				delete_transient( 'qtdesk_email_' . substr( hash_hmac( 'sha256', strtolower( $mail ), wp_salt( 'auth' ) ), 0, 32 ) );
 			}
 			echo 'counter reset';

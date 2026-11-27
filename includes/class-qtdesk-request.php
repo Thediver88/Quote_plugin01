@@ -204,6 +204,13 @@ class Qtdesk_Request {
 			}
 		}
 
+		// A double click or a reload of the POST must not make a second order: the same form and cart is handled once.
+		$once = 'qtdesk_once_' . md5( ( isset( $posted['_qtdesk_nonce'] ) ? (string) $posted['_qtdesk_nonce'] : '' ) . WC()->cart->get_cart_hash() . get_current_user_id() );
+		if ( get_transient( $once ) ) {
+			self::done();
+		}
+		set_transient( $once, 1, 5 * MINUTE_IN_SECONDS );
+
 		// 5. Limits. Counters go up only now, after every other check has passed.
 		$user_id  = get_current_user_id();
 		$ip_limit = Qtdesk_Settings::ip_limit();
@@ -211,6 +218,7 @@ class Qtdesk_Request {
 		if ( ! Qtdesk_Limits::within( 'email', self::$values['email'], 3 )
 			|| ( $user_id && ! Qtdesk_Limits::within( 'user', (string) $user_id, 5 ) )
 			|| ! Qtdesk_Limits::within( 'ip', $ip, $ip_limit ) ) {
+			delete_transient( $once );
 			self::$errors['form'] = __( 'You have sent several requests already. Please try again in an hour.', 'quote-desk-for-woocommerce' );
 			return;
 		}
@@ -244,6 +252,7 @@ class Qtdesk_Request {
 		try {
 			self::create_order( self::$values, $overflow );
 		} catch ( Exception $e ) {
+			delete_transient( $once );
 			self::$errors['form'] = __( 'Sorry, your request could not be saved. Please try again.', 'quote-desk-for-woocommerce' );
 			return;
 		}
@@ -287,10 +296,13 @@ class Qtdesk_Request {
 		$customer->set_shipping_postcode( $values['postcode'] );
 		$customer->set_billing_address_1( $values['address'] );
 		$customer->set_shipping_address_1( $values['address'] );
-		WC()->cart->calculate_totals();
-		// Give the shopper's saved address back: a quote request must not overwrite it.
-		foreach ( $before as $prop => $old ) {
-			$customer->{'set_' . $prop}( $old );
+		try {
+			WC()->cart->calculate_totals();
+		} finally {
+			// Give the shopper's saved address back: a quote request must not overwrite it, even if totals fail.
+			foreach ( $before as $prop => $old ) {
+				$customer->{'set_' . $prop}( $old );
+			}
 		}
 
 		// Built in memory and saved once, so other plugins never see a half-made order.

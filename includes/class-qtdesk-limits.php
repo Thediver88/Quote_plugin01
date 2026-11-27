@@ -106,6 +106,11 @@ class Qtdesk_Limits {
 		return (int) get_transient( self::key( $kind, $value ) ) < $limit;
 	}
 
+	// Best effort by design: the read-then-write is not atomic, so parallel posts can overshoot a per-address limit
+	// slightly. The shop-wide ceiling (bump_global) is the atomic backstop. Where client_ip() finds no usable
+	// address the per-IP limit is skipped; shops behind a proxy return the real address from the
+	// "qtdesk_client_ip" filter. With an external object cache the shop-wide counter lives in the cache
+	// and can be reset by eviction.
 	/**
 	 * Count one request against a per-address limit.
 	 *
